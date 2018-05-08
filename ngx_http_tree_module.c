@@ -37,6 +37,7 @@ static char *ngx_http_tree(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static ngx_int_t ngx_http_tree_handler(ngx_http_request_t *r);
 static ngx_int_t ngx_http_tree_request_init(ngx_conf_t *cf);
 static ngx_int_t ngx_http_tree_request_handler(ngx_http_request_t *r);
+static ngx_int_t ngx_http_tree_rewrite_handler(ngx_http_request_t *r);
 /**
  * This module provided directive: hello world.
  *
@@ -91,26 +92,55 @@ static ngx_int_t
 ngx_http_tree_request_handler(ngx_http_request_t *r)
 {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "------------------test callback-----------------------");
+                   "------------------access callback-----------------------");
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+        "http args: \"%V\"", &r->args);
+
+    ngx_str_t args = ngx_string("response_type=code&redirect_uri=http://192.168.80.160:8383/github/callback&client_id=6086dc8afc3f6cc9b5cf&state=1234567899");
+    r->args = args;
 
     return NGX_OK;
+}
+
+static ngx_int_t
+ngx_http_tree_rewrite_handler(ngx_http_request_t *r)
+{
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "------------------rewrite callback-----------------------");
+ 
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+        "http args: \"%V\"", &r->args);
+    ngx_str_t args = ngx_string("state=xxxxxxxxxxxxxxxxxxxxxxx");
+    r->args = args;
+   
+
+    return NGX_DECLINED;
 }
 
 
 static ngx_int_t
 ngx_http_tree_request_init(ngx_conf_t *cf)
 {
-    ngx_http_handler_pt        *h;
+    ngx_http_handler_pt        *haccess;
+    ngx_http_handler_pt        *hrewrite;
     ngx_http_core_main_conf_t  *cmcf;
 
     cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
 
-    h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
-    if (h == NULL) {
+    haccess = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
+    if (haccess == NULL) {
         return NGX_ERROR;
     }
 
-    *h = ngx_http_tree_request_handler;
+    *haccess = ngx_http_tree_request_handler;
+
+    hrewrite = ngx_array_push(&cmcf->phases[NGX_HTTP_REWRITE_PHASE].handlers);
+    if (hrewrite == NULL) {
+        return NGX_ERROR;
+    }
+
+    *hrewrite = ngx_http_tree_rewrite_handler;
+
 
     return NGX_OK;
 }
@@ -127,6 +157,12 @@ static ngx_int_t ngx_http_tree_handler(ngx_http_request_t *r)
 {
     ngx_buf_t *b;
     ngx_chain_t out;
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+        "-------------------tree-------------------------", 0);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+        "http args: \"%V\"", &r->args);
+    
 
     /* Set the Content-Type header. */
     r->headers_out.content_type.len = sizeof("text/plain") - 1;
